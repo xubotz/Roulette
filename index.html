@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Roulette</title>
+<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:wght@600;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#efe9dc;--ink:#1d2a22;--panel:#e0d8c4;--brass:#8a6420;--felt:#14533a;--red:#a3262a;--blk:#15191b;--grn:#1f7a49;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0b1812;--ink:#efe7d3;--panel:#14261d;--brass:#d4a94a}}
+:root[data-theme="dark"]{--bg:#0b1812;--ink:#efe7d3;--panel:#14261d;--brass:#d4a94a}
+*{box-sizing:border-box}
+html{color-scheme:light dark}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 system-ui,-apple-system,Segoe UI,sans-serif}
+main{max-width:460px;margin:0 auto;padding:14px 12px 28px}
+h1{font:800 30px "Bodoni Moda",Georgia,serif;margin:4px 0 10px;letter-spacing:.02em}
+.top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.bank{font:600 20px "Bodoni Moda",Georgia,serif;color:var(--brass);text-align:right;margin:-2px 0 6px}
+.live{align-self:center;background:var(--ink);color:var(--bg);text-decoration:none;font-weight:700;font-size:15px;padding:9px 14px;border-radius:999px;white-space:nowrap}
+.live:focus-visible{outline:3px solid var(--brass);outline-offset:2px}
+.wheelbox{display:flex;justify-content:center}
+canvas{width:min(320px,86vw);height:min(320px,86vw)}
+.msg{min-height:44px;text-align:center;font-weight:600;margin:6px 0}
+.hist{display:flex;gap:5px;justify-content:center;flex-wrap:wrap;min-height:28px;margin-bottom:8px}
+.hist span{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:13px;font-weight:700}
+.chips{display:flex;gap:8px;justify-content:center;margin:8px 0}
+.chipbtn{width:52px;height:52px;border-radius:50%;border:3px dashed #fff8;font-weight:800;color:#fff;cursor:pointer;font-size:15px}
+.chipbtn[aria-pressed="true"]{outline:3px solid var(--brass);outline-offset:3px}
+.tbl{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;background:var(--felt);padding:6px;border-radius:10px;border:3px solid var(--brass)}
+.c{position:relative;min-height:40px;border:1px solid #fff6;border-radius:4px;background:var(--felt);color:#fff;font:700 16px system-ui,sans-serif;cursor:pointer;padding:0}
+.c.r{background:var(--red)}.c.b{background:var(--blk)}.c.g{background:var(--grn);grid-column:1/-1}
+.c.o{font-size:13px;min-height:40px}.c.w{grid-column:span 1}
+.c:focus-visible,button:focus-visible{outline:3px solid #ffd76a;outline-offset:2px}
+.c:disabled{cursor:default;opacity:.8}
+.c.win{box-shadow:0 0 0 3px #ffd76a inset}
+.stk[hidden]{display:none}
+.stk{position:absolute;right:2px;top:2px;min-width:22px;height:22px;padding:0 4px;border-radius:11px;background:#f4e3a8;color:#222;font-size:11px;display:grid;place-items:center;border:2px dashed #8a6420}
+.row{display:flex;gap:8px;margin-top:12px}
+.row button{flex:1;padding:12px 6px;border-radius:8px;border:2px solid var(--brass);background:var(--panel);color:var(--ink);font-weight:700;font-size:15px;cursor:pointer}
+.row button.go{background:var(--brass);color:#fff;flex:2}
+.row button:disabled{opacity:.45;cursor:default}
+.note{font-size:13px;opacity:.75;text-align:center;margin-top:10px}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
+</style></head><body><main>
+<div class="top"><h1>Roulette</h1><a class="live" href="https://gocashy.com/bfgxsxl10" target="_blank" rel="noopener noreferrer">Play live</a></div>
+<div class="bank" id="bank"></div>
+<div class="wheelbox"><canvas id="cv" width="640" height="640" aria-label="Roulette wheel"></canvas></div>
+<div class="msg" id="msg" aria-live="polite">Place your bets, then spin.</div>
+<div class="hist" id="hist"></div>
+<div class="chips" id="chips"></div>
+<div class="tbl" id="tbl"></div>
+<div class="row"><button id="undo">Undo</button><button id="clear">Clear</button><button id="rebet">Rebet</button><button class="go" id="spin">Spin</button></div>
+<div class="note">European wheel, single zero. Straight 35:1, dozens and columns 2:1, even-money bets 1:1.</div>
+</main>
+<script>
+const ORDER=[0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
+const REDS=new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
+const col=n=>n===0?'#1f7a49':REDS.has(n)?'#a3262a':'#15191b';
+const OUT={
+ c1:{t:'2:1',m:2,f:n=>n&&n%3===1},c2:{t:'2:1',m:2,f:n=>n&&n%3===2},c3:{t:'2:1',m:2,f:n=>n&&n%3===0},
+ d1:{t:'1st 12',m:2,f:n=>n>=1&&n<=12},d2:{t:'2nd 12',m:2,f:n=>n>=13&&n<=24},d3:{t:'3rd 12',m:2,f:n=>n>=25},
+ low:{t:'1–18',m:1,f:n=>n>=1&&n<=18},high:{t:'19–36',m:1,f:n=>n>=19},
+ even:{t:'Even',m:1,f:n=>n&&n%2===0},odd:{t:'Odd',m:1,f:n=>n%2===1},
+ red:{t:'Red',m:1,f:n=>REDS.has(n),cls:'r'},black:{t:'Black',m:1,f:n=>n&&!REDS.has(n),cls:'b'}
+};
+const $=id=>document.getElementById(id);
+let bank=1000,chip=5,bets={},stack=[],last=null,busy=false,wheel=0,hist=[],cov=new Set(),ball=null;
+try{const s=localStorage.getItem('rl-bank');if(s&&+s>0)bank=+s}catch(e){}
+const save=()=>{try{localStorage.setItem('rl-bank',bank)}catch(e){}};
+
+// table
+const tbl=$('tbl');
+function cell(k,label,cls){const b=document.createElement('button');b.className='c '+cls;b.dataset.k=k;b.innerHTML=label+'<span class="stk" hidden></span>';b.onclick=()=>place(k);tbl.appendChild(b)}
+cell('n0','0','g');
+for(let n=1;n<=36;n++)cell('n'+n,n,REDS.has(n)?'r':'b');
+['c1','c2','c3','d1','d2','d3'].forEach(k=>cell(k,OUT[k].t,'o'));
+['low','even','red','black','odd','high'].forEach(k=>cell(k,OUT[k].t,'o '+(OUT[k].cls||'')));
+tbl.querySelectorAll('.o').forEach(b=>{if(['d1','d2','d3'].includes(b.dataset.k))b.style.gridColumn='1/-1'});
+['low','even','red','black','odd','high'].forEach(k=>{}); 
+// chips
+[1,5,25,100].forEach(v=>{const b=document.createElement('button');b.className='chipbtn';b.textContent=v;b.style.background={1:'#5b6b73',5:'#a3262a',25:'#1f6b3f',100:'#15191b'}[v];b.setAttribute('aria-pressed',v===chip);b.onclick=()=>{chip=v;[...$('chips').children].forEach(x=>x.setAttribute('aria-pressed',x===b))};$('chips').appendChild(b)});
+
+const total=()=>Object.values(bets).reduce((a,b)=>a+b,0);
+function render(){
+ $('bank').textContent='$'+bank.toLocaleString();cov=cover();if(!busy)redraw();
+ tbl.querySelectorAll('.c').forEach(b=>{const a=bets[b.dataset.k],s=b.querySelector('.stk');s.hidden=!a;s.textContent=a||'';b.disabled=busy});
+ $('undo').disabled=busy||!stack.length;$('clear').disabled=busy||!stack.length;
+ $('rebet').disabled=busy||!last||stack.length>0;const broke=!busy&&bank<=0&&!stack.length;$('spin').disabled=busy||(!stack.length&&!broke);
+ $('hist').innerHTML=hist.map(n=>`<span style="background:${col(n)}">${n}</span>`).join('');
+}
+function place(k){
+ if(busy)return;
+ const amt=Math.min(chip,bank);
+ if(amt<=0){say('No chips left. Reset to start again.');return}
+ bank-=amt;bets[k]=(bets[k]||0)+amt;stack.push([k,amt]);render()
+}
+$('undo').onclick=()=>{const [k,a]=stack.pop();bets[k]-=a;if(!bets[k])delete bets[k];bank+=a;render()};
+$('clear').onclick=()=>{bank+=total();bets={};stack=[];render()};
+$('rebet').onclick=()=>{
+ const t=Object.values(last).reduce((a,b)=>a+b,0);
+ if(t>bank){say('Not enough chips to repeat the last bets.');return}
+ for(const k in last){bets[k]=last[k];stack.push([k,last[k]])}bank-=t;render()
+};
+function say(t){$('msg').textContent=t}
+
+// wheel drawing
+const cv=$('cv'),ctx=cv.getContext('2d'),S=640,R=S/2,step=Math.PI*2/37;
+function draw(wa,ba,br){
+ const c=ctx;c.setTransform(1,0,0,1,0,0);c.clearRect(0,0,S,S);c.translate(R,R);
+ c.beginPath();c.arc(0,0,R-4,0,7);c.fillStyle='#5b3d10';c.fill();
+ c.beginPath();c.arc(0,0,R-16,0,7);c.fillStyle='#b88a2e';c.fill();
+ c.save();c.rotate(wa-Math.PI/2);
+ for(let i=0;i<37;i++){
+  const n=ORDER[i];c.beginPath();c.moveTo(0,0);c.arc(0,0,R*.9,(i-.5)*step,(i+.5)*step);c.closePath();
+  c.fillStyle=col(n);c.fill();if(cov.size&&!cov.has(n)){c.fillStyle='rgba(0,0,0,.6)';c.fill()}c.strokeStyle='#d9c58a';c.lineWidth=1.5;c.stroke();
+  c.save();c.rotate(i*step);c.translate(R*.8,0);c.rotate(Math.PI/2);
+  c.fillStyle='#fff';c.font='700 24px system-ui,sans-serif';c.textAlign='center';c.textBaseline='middle';c.fillText(n,0,0);c.restore();
+ }
+ c.beginPath();c.arc(0,0,R*.66,0,7);c.fillStyle='#2a1d0a';c.fill();
+ c.beginPath();c.arc(0,0,R*.56,0,7);c.fillStyle='#14533a';c.fill();
+ c.lineWidth=6;c.strokeStyle='#d4a94a';c.stroke();
+ if(cov.size){c.strokeStyle='#ffd76a';c.lineWidth=5;c.shadowColor='#ffd76a';c.shadowBlur=14;for(let i=0;i<37;i++){if(!cov.has(ORDER[i]))continue;c.beginPath();c.arc(0,0,R*.9,(i-.5)*step,(i+.5)*step);c.arc(0,0,R*.67,(i+.5)*step,(i-.5)*step,true);c.closePath();c.stroke()}c.shadowBlur=0}
+ for(let i=0;i<4;i++){c.rotate(Math.PI/2);c.fillStyle='#d4a94a';c.fillRect(-5,-R*.5,10,R*.5)}
+ c.beginPath();c.arc(0,0,22,0,7);c.fillStyle='#d4a94a';c.fill();
+ c.restore();
+ if(br!=null){
+  const x=br*Math.cos(ba-Math.PI/2),y=br*Math.sin(ba-Math.PI/2);
+  c.beginPath();c.arc(x,y,10,0,7);c.fillStyle='#fff';c.shadowColor='#0008';c.shadowBlur=6;c.fill();c.shadowBlur=0;
+ }
+}
+const ease=p=>1-Math.pow(1-p,3);
+function redraw(){draw(wheel,ball&&ball.a,ball&&ball.r)}
+function cover(){const s=new Set();for(const k in bets){if(k[0]==='n')s.add(+k.slice(1));else for(let n=0;n<37;n++)if(OUT[k].f(n))s.add(n)}return s}
+redraw();
+
+function spin(){
+ if(busy||!stack.length)return;
+ busy=true;last={...bets};save();render();say('No more bets…');
+ const win=Math.floor(Math.random()*37),idx=ORDER.indexOf(win);
+ const w0=wheel,wEnd=w0+Math.PI*2*3+Math.random()*Math.PI*2;
+ let bT=wEnd+idx*step;while(bT>-Math.PI*10)bT-=Math.PI*2;
+ const dur=5600,t0=performance.now();
+ (function f(now){
+  const p=Math.min(1,(now-t0)/dur),e=ease(p);
+  const wa=w0+(wEnd-w0)*e,ba=bT*e;
+  const dp=Math.max(0,(p-.55)/.45),br=R*(.95-.2*ease(dp))+(dp>0&&dp<1?Math.sin(dp*18)*4*(1-dp):0);
+  draw(wa,ba,br);
+  if(p<1)requestAnimationFrame(f);else{wheel=wEnd%(Math.PI*2);finish(win)}
+ })(t0);
+}
+function finish(n){
+ let back=0;const hit=[];
+ for(const k in bets){
+  const a=bets[k];
+  if(k[0]==='n'){if(+k.slice(1)===n){back+=a*36;hit.push(k)}}
+  else if(OUT[k].f(n)){back+=a*(OUT[k].m+1);hit.push(k)}
+ }
+ const staked=total();bank+=back;
+ hist.unshift(n);hist=hist.slice(0,12);
+ const name=n+' '+(n===0?'green':REDS.has(n)?'red':'black');
+ say(back>staked?`${name}. You won $${back-staked}.`:back>0?`${name}. You got $${back} back.`:`${name}. No win this time.`);
+ ball={a:wheel+ORDER.indexOf(n)*step,r:R*.75};bets={};stack=[];busy=false;save();
+ if(bank<=0){say(name+'. You’re out of chips.');$('spin').textContent='Reset';$('spin').disabled=false;$('spin').onclick=reset}
+ render();
+ hit.forEach(k=>{const el=tbl.querySelector(`[data-k="${k}"]`);if(el)el.classList.add('win')});
+ tbl.querySelectorAll('.win').forEach(el=>setTimeout(()=>el.classList.remove('win'),2500));
+ // always flash the number
+ const el=tbl.querySelector(`[data-k="n${n}"]`);el.classList.add('win');setTimeout(()=>el.classList.remove('win'),2500);
+}
+function reset(){bank=1000;save();$('spin').textContent='Spin';$('spin').onclick=spin;say('Fresh $1,000. Place your bets.');render()}
+$('spin').onclick=spin;
+render();
+</script></body></html>
